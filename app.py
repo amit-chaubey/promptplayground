@@ -1,94 +1,75 @@
 import streamlit as st
-import asyncio
 from models import ModelHandler
 from prompts import PromptTemplates
+import re
 
 # Initialize handlers
 model_handler = ModelHandler()
-prompt_templates = PromptTemplates()
+prompt_handler = PromptTemplates()
 
-# Set page config
-st.set_page_config(
-    page_title="Prompt Playground",
-    page_icon="🤖",
-    layout="wide"
+# Set up the page
+st.set_page_config(page_title="Prompt Playground", layout="wide")
+st.title("Prompt Playground")
+
+# Get available models
+available_models = model_handler.get_available_models()
+
+if not available_models:
+    st.error("No AI models available. Please check your API keys in the .env file.")
+    st.stop()
+
+# Model selection
+model_provider = st.selectbox(
+    "Select Model Provider",
+    options=list(set(model['provider'] for model in available_models.values()))
 )
 
-# Title and description
-st.title("🤖 Prompt Playground")
-st.markdown("""
-This playground allows you to experiment with different AI models and prompt templates.
-Select a model and prompt type, then provide your input to see the results.
-""")
+# Filter models by provider
+provider_models = {
+    model_id: model for model_id, model in available_models.items()
+    if model['provider'] == model_provider
+}
 
-# Create two columns for the layout
-col1, col2 = st.columns([1, 1])
+selected_model = st.selectbox(
+    "Select Model",
+    options=list(provider_models.keys()),
+    format_func=lambda x: provider_models[x]['name']
+)
 
-with col1:
-    # Model selection
-    st.subheader("Select Model")
-    available_models = model_handler.get_available_models()
-    selected_model = st.selectbox(
-        "Choose an AI model",
-        options=list(available_models.keys()),
-        format_func=lambda x: f"{available_models[x]['name']} ({available_models[x]['provider']})"
-    )
-    
-    # Display model description
-    if selected_model:
-        st.info(available_models[selected_model]['description'])
+# Prompt template selection
+available_prompts = prompt_handler.get_available_prompts()
+template_key = st.selectbox(
+    "Select Prompt Template",
+    options=list(available_prompts.keys())
+)
+template_data = available_prompts[template_key]
+template_str = template_data['template']
 
-    # Prompt template selection
-    st.subheader("Select Prompt Template")
-    available_prompts = prompt_templates.get_available_prompts()
-    selected_prompt = st.selectbox(
-        "Choose a prompt template",
-        options=list(available_prompts.keys()),
-        format_func=lambda x: available_prompts[x]['name']
-    )
+# Show example input and output
+st.markdown("**Example Input:**")
+st.code(template_data.get('example_input', ''), language='text')
+st.markdown("**Example Output:**")
+st.code(template_data.get('example_output', ''), language='text')
 
-    # Display prompt template details
-    if selected_prompt:
-        st.markdown("**Description:**")
-        st.write(available_prompts[selected_prompt]['description'])
-        
-        st.markdown("**Example Input:**")
-        st.code(available_prompts[selected_prompt]['example_input'])
-        
-        st.markdown("**Example Output:**")
-        st.code(available_prompts[selected_prompt]['example_output'])
+# Extract template variables using regex
+vars_in_template = re.findall(r'\{(\w+)\}', template_str)
+user_inputs = {}
 
-with col2:
-    # User input
-    st.subheader("Your Input")
-    user_input = st.text_area(
-        "Enter your input here",
-        height=200,
-        placeholder="Type your input here..."
-    )
+# Create input fields for template variables
+for var in vars_in_template:
+    user_inputs[var] = st.text_input(f"Enter {var}")
 
-    # Generate button
-    if st.button("Generate Response", type="primary"):
-        if not user_input:
-            st.warning("Please enter some input first!")
-        else:
-            with st.spinner("Generating response..."):
-                # Get the formatted prompt
-                prompt = prompt_templates.get_prompt(
-                    selected_prompt,
-                    query=user_input,
-                    data=user_input,
-                    text=user_input
-                )
-                
-                # Generate response
-                response = asyncio.run(
-                    model_handler.generate_response(selected_model, prompt)
-                )
-                
-                # Display response
-                st.subheader("Generated Response")
-                st.markdown(response)
+# Generate prompt
+if st.button("Generate Prompt"):
+    try:
+        prompt = prompt_handler.get_prompt(template_key, **user_inputs)
+        st.text_area("Generated Prompt", prompt, height=200)
+        # Generate response
+        if st.button("Generate Response"):
+            response = model_handler.generate_response(selected_model, prompt)
+            st.text_area("Model Response", response, height=400)
+    except Exception as e:
+        st.error(f"Error generating prompt: {e}")
 
 # Footer
 st.markdown("---")
