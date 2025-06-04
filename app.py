@@ -59,17 +59,17 @@ user_inputs = {}
 for var in vars_in_template:
     user_inputs[var] = st.text_input(f"Enter {var}")
 
-# Generate prompt
-if st.button("Generate Prompt"):
+# Generate response directly
+if st.button("Generate Response"):
     try:
         prompt = prompt_handler.get_prompt(template_key, **user_inputs)
-        st.text_area("Generated Prompt", prompt, height=200)
-        # Generate response
-        if st.button("Generate Response"):
-            response = model_handler.generate_response(selected_model, prompt)
-            st.text_area("Model Response", response, height=400)
+        st.markdown("**Generated Prompt:**")
+        st.text_area("Prompt Sent to Model", prompt, height=150)
+        response = model_handler.generate_response(selected_model, prompt)
+        st.markdown("**Model Response:**")
+        st.text_area("Model Response", response, height=400)
     except Exception as e:
-        st.error(f"Error generating prompt: {e}")
+        st.error(f"Error: {e}")
 
 # Footer
 st.markdown("---")
